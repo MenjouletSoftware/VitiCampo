@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">VitisPro ERP</title>
+  <desc id="desc">Logo premium de VitisPro ERP con tonalidades malbec, verde y oro.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#4A1525"/>
+      <stop offset="100%" stop-color="#2C5E3B"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="84" fill="url(#bg)"/>
+  <circle cx="170" cy="176" r="48" fill="#D4AF37" opacity="0.95"/>
+  <circle cx="258" cy="140" r="58" fill="#C8DCC5" opacity="0.92"/>
+  <circle cx="345" cy="176" r="48" fill="#D4AF37" opacity="0.9"/>
+  <circle cx="210" cy="274" r="52" fill="#9BC7A0" opacity="0.9"/>
+  <circle cx="302" cy="274" r="52" fill="#9BC7A0" opacity="0.9"/>
+  <path d="M110 306c62-20 112-28 170-28 80 0 142 20 186 56v102H110V306z" fill="#D4AF37" opacity="0.9"/>
+  <path d="M158 170c24 10 42 28 52 52-18-8-37-12-57-12-35 0-68 10-94 28 10-46 62-80 99-68z" fill="#FAFAFA" opacity="0.18"/>
+  <path d="M168 108h176c12 0 20 9 20 20v178c0 14-11 24-24 24H182c-14 0-24-10-24-24V128c0-11 9-20 20-20z" fill="none" stroke="#FAFAFA" stroke-opacity="0.8" stroke-width="14"/>
+  <text x="256" y="350" font-size="128" font-family="Arial, Helvetica, sans-serif" font-weight="900" text-anchor="middle" fill="#FAFAFA">VP</text>
+</svg>
