@@ -10,7 +10,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'GEMINI_API_KEY no configurada' }, { status: 500 });
     }
 
-    const ai = new GoogleGenAI({ apiKey });
+    // Inicializacion oficial segun la ultima documentacion de Google Gen AI
+    const ai = new GoogleGenAI({ apiKey: apiKey });
     
     const prompt = `Actua como un ingeniero agronomo experto en viticultura de precision. 
     Analiza la siguiente situacion en el vinedo y genera un reporte tecnico estructurado:
@@ -20,13 +21,15 @@ export async function POST(req: Request) {
     
     Devuelve un diagnostico presuntivo, nivel de riesgo (Bajo, Medio, Alto) y un plan de accion inmediato con 3 recomendaciones tecnicas de campo. Manten el tono profesional.`;
 
+    // Metodo nativo y correcto para generar contenido con gemini-1.5-flash
     const response = await ai.models.generateContent({
       model: 'gemini-1.5-flash',
       contents: prompt,
     });
 
+    // Retorna el texto limpio extraido de la respuesta oficial de Google
     return NextResponse.json({ reporte: response.text });
-  } catch {
+  } catch (error) {
     return NextResponse.json({ error: 'Error interno en el servidor de IA' }, { status: 500 });
   }
 }
