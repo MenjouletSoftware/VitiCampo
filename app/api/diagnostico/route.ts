@@ -1,66 +1,32 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenAI } from '@google/genai';
 
-type Body = {
-  variedadUva: string;
-  faseFenologica: string;
-  sintomasDetectados: string;
-};
-
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const parsed = (await request.json()) as unknown;
-    if (!parsed || typeof parsed !== 'object') {
-      return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 });
-    }
-
-    const { variedadUva, faseFenologica, sintomasDetectados } = parsed as Body;
-    if (typeof variedadUva !== 'string' || typeof faseFenologica !== 'string' || typeof sintomasDetectados !== 'string') {
-      return NextResponse.json({ error: 'Campos inválidos' }, { status: 400 });
-    }
+    const { variedadUva, faseFenologica, sintomasDetectados } = await req.json();
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: 'GEMINI_API_KEY no configurada' }, { status: 500 });
     }
 
-    const prompt = `Genera un reporte corto y profesional a partir de los siguientes datos:\nVariedad de uva: ${variedadUva}\nFase fenológica: ${faseFenologica}\nSíntomas detectados: ${sintomasDetectados}\n\nDevuelve solo el texto del reporte.`;
+    const ai = new GoogleGenAI({ apiKey });
+    
+    const prompt = `Actua como un ingeniero agronomo experto en viticultura de precision. 
+    Analiza la siguiente situacion en el vinedo y genera un reporte tecnico estructurado:
+    - Variedad de Uva: ${variedadUva}
+    - Fase Fenologica: ${faseFenologica}
+    - Sintomas Detectados: ${sintomasDetectados}
+    
+    Devuelve un diagnostico presuntivo, nivel de riesgo (Bajo, Medio, Alto) y un plan de accion inmediato con 3 recomendaciones tecnicas de campo. Manten el tono profesional.`;
 
-    const genai = (await import('@google/genai')) as any;
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
 
-    let reporteTexto = '';
-
-    try {
-      if (typeof genai.TextGenerationClient === 'function') {
-        const client = new genai.TextGenerationClient({ apiKey });
-        const result = await client.generate?.({ model: 'gemini-1.5-flash', prompt });
-        reporteTexto = result?.text ?? result?.output?.[0]?.content ?? String(result ?? '');
-      } else if (typeof genai.generate === 'function') {
-        const result = await genai.generate({ model: 'gemini-1.5-flash', prompt, apiKey });
-        reporteTexto = result?.text ?? result?.output?.[0]?.content ?? String(result ?? '');
-      } else if (genai.default && typeof genai.default.generate === 'function') {
-        const result = await genai.default.generate({ model: 'gemini-1.5-flash', prompt, apiKey });
-        reporteTexto = result?.text ?? result?.output?.[0]?.content ?? String(result ?? '');
-      } else {
-        const resp = await fetch('https://api.generativeai.google/v1/models/gemini-1.5-flash:generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ prompt }),
-        });
-        const data = await resp.json();
-        reporteTexto = data?.candidates?.[0]?.content ?? data?.output?.[0]?.content ?? data?.text ?? JSON.stringify(data ?? '');
-      }
-    } catch (e) {
-      const resp = await fetch('https://api.generativeai.google/v1/models/gemini-1.5-flash:generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ prompt }),
-      });
-      const data = await resp.json();
-      reporteTexto = data?.candidates?.[0]?.content ?? data?.output?.[0]?.content ?? data?.text ?? JSON.stringify(data ?? '');
-    }
-
-    return NextResponse.json({ reporte: reporteTexto });
-  } catch (err) {
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    return NextResponse.json({ reporte: response.text });
+  } catch {
+    return NextResponse.json({ error: 'Error interno en el servidor de IA' }, { status: 500 });
   }
 }
