@@ -24,7 +24,7 @@ export default function Page(): JSX.Element {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/diagnostico', {
+      const res = await fetch('/api/diagnostico/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
