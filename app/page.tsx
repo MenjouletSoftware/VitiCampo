@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 
 type ApiResponse = { reporte?: string; error?: string };
 
+const checkoutUrl = process.env.NEXT_PUBLIC_POLAR_CHECKOUT_URL ?? 'https://polar.sh';
+
 export default function Page(): JSX.Element {
   const [variedadUva, setVariedadUva] = useState<string>('');
   const [faseFenologica, setFaseFenologica] = useState<string>('');
@@ -63,7 +65,7 @@ export default function Page(): JSX.Element {
           <aside className="lg:col-span-1 bg-white shadow-md rounded-xl p-6 border border-gray-100">
             <h2 className="text-lg font-medium text-gray-800">Plan premium</h2>
             <p className="mt-2 text-sm text-gray-600">
-              Acceso ilimitado al analisis agronomico con IA para Software Menjoulet.
+              Acceso ilimitado al analisis agronomico con IA para la gestión de bodegas y viñedos.
             </p>
 
             <div className="mt-4">
@@ -72,12 +74,12 @@ export default function Page(): JSX.Element {
                 <span className="text-sm text-gray-500">USD / mes</span>
               </div>
               <p className="mt-3 text-sm text-gray-600">
-                Acceso ilimitado al analisis agronomico con IA para Software Menjoulet, gestionado a traves de Polar.sh.
+                Diagnóstico fitosanitario multimodal, métricas operativas y seguimiento B2B multi-tenant.
               </p>
             </div>
 
             <a
-              href="https://polar.sh"
+              href={checkoutUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-6 inline-block w-full text-center bg-[#1a3324] hover:bg-[#13261a] text-white px-4 py-2 rounded-md text-sm transition-colors"
@@ -145,7 +147,7 @@ export default function Page(): JSX.Element {
         </section>
 
         <footer className="text-center text-xs text-gray-500">
-          <span>© {new Date().getFullYear()} Viticampo — Software Menjoulet</span>
+          <span>© {new Date().getFullYear()} Viticampo — Bodega Inteligente</span>
         </footer>
       </div>
     </main>

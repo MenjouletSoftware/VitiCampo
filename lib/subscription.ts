@@ -1,21 +1,10 @@
 export const PLAN_DEFINITIONS = {
-  starter: {
-    label: 'Starter',
-    trialDays: 7,
-    hectares: 'Hasta 10 ha',
-    summary: 'Ideal para pequeños viñedos y operaciones iniciales.',
-  },
-  pro: {
-    label: 'Pro',
-    trialDays: 14,
-    hectares: 'Hasta 100 ha',
-    summary: 'Para explotaciones medias con seguimiento agronómico real.',
-  },
-  enterprise: {
-    label: 'Enterprise',
+  premium: {
+    label: 'Premium',
     trialDays: 30,
-    hectares: '100+ ha / multi-sitio',
-    summary: 'Para bodegas y grupos con trazabilidad, cosecha y análisis.',
+    priceUsd: 149,
+    hectares: 'Acceso completo',
+    summary: 'Plan comercial premium de VitiCampo con diagnóstico agronómico inteligente y gestión B2B multi-tenant.',
   },
 } as const;
 
@@ -48,55 +37,57 @@ export function getTrialDaysLeft(trialEndsAt?: string) {
   const expiresAt = new Date(trialEndsAt);
   const now = new Date();
   const diffMs = expiresAt.getTime() - now.getTime();
-
-  if (diffMs <= 0) {
-    return 0;
-  }
-
+  if (diffMs <= 0) return 0;
   return Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 }
 
 export function getSubscriptionState(user: SubscriptionUser) {
-  const daysSince = getDaysSince(user.created_at);
+  const plan = user.plan ?? 'premium';
   const isVIP = Boolean(user.es_vip);
-  const fallbackTrialDaysLeft = Math.max(0, 60 - daysSince);
-  const trialDaysLeft = getTrialDaysLeft(user.trial_ends_at) || fallbackTrialDaysLeft;
-  const isDemoTrialActive = Boolean(user.trial_ends_at) && trialDaysLeft > 0;
-  const isWithinTrial = !isVIP && (isDemoTrialActive || daysSince < 60);
-  const hasAccess = isVIP || isWithinTrial || user.subscription_status === 'active';
+  const trialDaysLeft = getTrialDaysLeft(user.trial_ends_at);
+  const isWithinTrial = !isVIP && Boolean(user.trial_ends_at) && trialDaysLeft > 0;
+  const hasAccess = isVIP || user.subscription_status === 'active' || isWithinTrial || plan === 'premium';
 
   return {
-    daysSince,
+    daysSince: getDaysSince(user.created_at),
     isVIP,
     isWithinTrial,
     hasAccess,
     trialDaysLeft,
-    plan: user.plan || 'starter',
-    isDemoTrialActive,
+    plan,
+    isDemoTrialActive: isWithinTrial,
   };
 }
 
 export function getPlanMeta(plan?: PlanKey) {
-  return PLAN_DEFINITIONS[plan || 'starter'];
+  return PLAN_DEFINITIONS[plan || 'premium'];
 }
 
-export function createDemoTrialUser(plan: PlanKey = 'pro'): SubscriptionUser {
-  const planMeta = getPlanMeta(plan);
-  const trialEndsAt = new Date(Date.now() + planMeta.trialDays * 24 * 60 * 60 * 1000).toISOString();
-
+export function createTrialUser(plan: PlanKey = 'premium', trialEndsAt?: string): SubscriptionUser {
   return {
     created_at: new Date().toISOString(),
-    trial_ends_at: trialEndsAt,
+    trial_ends_at: trialEndsAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     plan,
-    subscription_status: 'inactive',
-    es_vip: false,
+    subscription_status: 'active',
+    es_vip: true,
   };
 }
 
-export function saveDemoTrial(plan: PlanKey) {
-  const user = createDemoTrialUser(plan);
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('viticampo-user', JSON.stringify(user));
-  }
-  return user;
+export function saveDemoTrial(plan: PlanKey = 'premium') {
+  return createTrialUser(plan);
+}
+
+export async function checkPortalAccess(email: string) {
+  const response = await fetch('/api/auth/eligibility', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+  });
+
+  const data = await response.json();
+  return {
+    allowedFreeTrial: Boolean(data.allowedFreeTrial),
+    requiresPayment: Boolean(data.requiresPayment),
+    reason: data.reason ?? 'Se requiere pago inmediato de $149 USD/mes.',
+  };
 }

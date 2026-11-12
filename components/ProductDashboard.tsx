@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { getRoleLabel, getSession, loadAppData, saveAppData, type AppData } from '@/lib/appData';
+import { getRoleLabel, loadAppData, saveAppData, type AppData } from '@/lib/appData';
+import { supabase } from '@/lib/supabase';
 
 const roleClass: Record<string, string> = {
   admin: 'bg-purple-100 text-purple-800',
@@ -11,12 +12,67 @@ const roleClass: Record<string, string> = {
 };
 
 export function ProductDashboard() {
-  const [session, setSession] = useState<ReturnType<typeof getSession>>(null);
+  const [session, setSession] = useState<{ name: string; email: string; role: 'admin' | 'operario' | 'supervisor' } | null>(null);
   const [data, setData] = useState<AppData | null>(null);
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'member' | 'admin'>('member');
+  const [inviteResult, setInviteResult] = useState<{ code: string; url: string } | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
 
   useEffect(() => {
-    setSession(getSession());
-    setData(loadAppData());
+    let isMounted = true;
+
+    const syncSession = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!isMounted) return;
+
+      const currentSession = sessionData.session;
+      if (!currentSession) {
+        setSession(null);
+        setData(loadAppData());
+        return;
+      }
+
+      const email = currentSession.user.email ?? '';
+      setSession({
+        email,
+        name: currentSession.user.user_metadata?.full_name ?? currentSession.user.email ?? 'Usuario',
+        role: 'admin',
+      });
+      try {
+        const response = await fetch(`/api/orgs?owner_email=${encodeURIComponent(email)}`);
+        const json = await response.json();
+        const firstOrg = json?.orgs?.[0];
+        if (firstOrg?.id) setOrgId(firstOrg.id);
+      } catch (error) {
+        console.error('org lookup failed', error);
+      }
+      setData(loadAppData());
+    };
+
+    syncSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      if (!isMounted) return;
+
+      if (!currentSession) {
+        setSession(null);
+        return;
+      }
+
+      setSession({
+        email: currentSession.user.email ?? '',
+        name: currentSession.user.user_metadata?.full_name ?? currentSession.user.email ?? 'Usuario',
+        role: 'admin',
+      });
+    });
+
+    return () => {
+      isMounted = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const stats = useMemo(() => {
@@ -50,9 +106,57 @@ export function ProductDashboard() {
     saveAppData(nextData);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('viticampo-session');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     window.location.href = '/login';
+  };
+
+  const handleInvite = async () => {
+    if (!orgId || !inviteEmail.trim()) {
+      alert('Debes indicar la organización y un correo para invitar.');
+      return;
+    }
+
+    setInviteBusy(true);
+    try {
+      const response = await fetch(`/api/orgs/${encodeURIComponent(orgId)}/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+      });
+      const json = await response.json();
+      if (!json.success) throw new Error(json.error || 'No se pudo crear la invitación');
+      const inviteUrl = json.invite?.url || `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/signup?invite_code=${encodeURIComponent(json.invite?.code || '')}`;
+      setInviteResult({ code: json.invite?.code || '', url: inviteUrl });
+      setInviteEmail('');
+    } catch (err) {
+      alert(String(err instanceof Error ? err.message : err));
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!orgId) {
+      alert('No hay una organización activa asociada a tu cuenta.');
+      return;
+    }
+
+    setCancelBusy(true);
+    try {
+      const response = await fetch(`/api/orgs/${encodeURIComponent(orgId)}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: session?.email ?? '' }),
+      });
+      const json = await response.json();
+      if (!json.success) throw new Error(json.error || 'No se pudo cancelar la cuenta');
+      alert('La suscripción ha sido cancelada correctamente.');
+    } catch (err) {
+      alert(String(err instanceof Error ? err.message : err));
+    } finally {
+      setCancelBusy(false);
+    }
   };
 
   if (!session || !data) {
@@ -130,6 +234,73 @@ export function ProductDashboard() {
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-purple-900">Cuenta</p>
+                <h2 className="mt-1 text-2xl font-black text-slate-900">Gestión de suscripción</h2>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-red-900">Cancelar suscripción / dar de baja cuenta</p>
+                  <p className="mt-1 text-sm text-red-700">Se bloquearán futuras renovaciones y el acceso al plan activo.</p>
+                </div>
+                <button type="button" onClick={handleCancelSubscription} disabled={cancelBusy || !orgId} className="btn-secondary border-red-200 bg-white text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50">
+                  {cancelBusy ? 'Cancelando...' : 'Dar de baja'}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-purple-900">Invitaciones</p>
+                  <h3 className="mt-1 text-lg font-black text-slate-900">Invitar personal al viñedo</h3>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-[1.2fr_0.8fr_auto]">
+                <input
+                  className="field"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="correo@ejemplo.com"
+                />
+                <select className="field" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as 'member' | 'admin')}>
+                  <option value="member">Miembro</option>
+                  <option value="admin">Administrador</option>
+                </select>
+                <button type="button" onClick={handleInvite} disabled={inviteBusy || !orgId} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+                  {inviteBusy ? 'Enviando...' : 'Invitar'}
+                </button>
+              </div>
+
+              {inviteResult && (
+                <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-800">Código de invitación</p>
+                  <p className="mt-2 break-all font-mono text-sm text-emerald-900">{inviteResult.code}</p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(inviteResult.url).catch(() => undefined);
+                      }}
+                      className="btn-secondary"
+                    >
+                      Copiar enlace
+                    </button>
+                    <a href={inviteResult.url} className="btn-secondary inline-flex items-center justify-center" target="_blank" rel="noreferrer">
+                      Abrir enlace
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
             <div className="mb-4 flex items-center justify-between">
               <div>

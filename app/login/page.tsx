@@ -2,79 +2,53 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { saveDemoTrial } from '@/lib/subscription';
-import { signInWithEmail } from '@/lib/auth';
-
-const validAccounts = [
-  { email: 'admin@viticampo.app', password: 'viticampo123', role: 'admin', name: 'Lucía Fernández' },
-  { email: 'operario@viticampo.app', password: 'viticampo123', role: 'operario', name: 'Martín Ruiz' },
-  { email: 'supervisor@viticampo.app', password: 'viticampo123', role: 'supervisor', name: 'Ana Gómez' },
-] as const;
+import { FormEvent, useEffect, useState } from 'react';
+import { getSession, signInWithEmail } from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('operario@viticampo.app');
-  const [password, setPassword] = useState('viticampo123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const session = localStorage.getItem('viticampo-session');
-    if (session) {
-      router.replace('/dashboard');
+    let isActive = true;
+
+    async function redirectIfLoggedIn() {
+      const { data } = await getSession();
+      if (isActive && data.session) {
+        router.replace('/dashboard');
+      }
     }
+
+    redirectIfLoggedIn();
+
+    return () => {
+      isActive = false;
+    };
   }, [router]);
 
-  const handleLogin = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
     setLoading(true);
 
-    const account = validAccounts.find(
-      (candidate) => candidate.email.toLowerCase() === email.trim().toLowerCase() && candidate.password === password,
-    );
-
-    (async () => {
-      try {
-        if (account) {
-          // demo flow
-          await new Promise((r) => setTimeout(r, 300));
-          const session = {
-            email: account.email,
-            name: account.name,
-            role: account.role,
-            loginAt: new Date().toISOString(),
-          };
-          localStorage.setItem('viticampo-session', JSON.stringify(session));
-          saveDemoTrial('pro');
-          router.push('/dashboard');
-          return;
-        }
-
-        // Attempt Supabase auth
-        const { data, error } = await signInWithEmail(email, password) as any;
-        if (error) {
-          setError('Credenciales incorrectas o usuario no confirmado.');
-          return;
-        }
-
-        // store minimal session
-        const session = { email, loginAt: new Date().toISOString() };
-        localStorage.setItem('viticampo-session', JSON.stringify(session));
-        router.push('/dashboard');
-      } catch (err: any) {
-        setError(String(err.message || err));
-      } finally {
-        setLoading(false);
+    try {
+      const { data, error: authError } = await signInWithEmail(email.trim(), password);
+      if (authError) {
+        setError(authError.message || 'Credenciales incorrectas o usuario no confirmado.');
+        return;
       }
-    })();
-  };
 
-  const fillDemo = (account: (typeof validAccounts)[number]) => {
-    setEmail(account.email);
-    setPassword(account.password);
-    setError('');
+      if (data.session) {
+        router.push('/dashboard');
+      }
+    } catch (err: any) {
+      setError(err?.message ?? 'No se pudo iniciar sesión.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -89,7 +63,7 @@ export default function LoginPage() {
 
         <div className="mt-8">
           <h1 className="text-3xl font-black text-slate-900">Ingresá a tu cuenta</h1>
-          <p className="mt-2 text-sm text-slate-600">Acceso seguro para administradores y operarios de campo.</p>
+          <p className="mt-2 text-sm text-slate-600">Acceso seguro para bodegas y equipos de operación agrícola.</p>
         </div>
 
         <form onSubmit={handleLogin} className="mt-8 space-y-5">
@@ -101,6 +75,7 @@ export default function LoginPage() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="usuario@viticampo.app"
+              required
             />
           </div>
 
@@ -112,6 +87,7 @@ export default function LoginPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="••••••••"
+              required
             />
           </div>
 
@@ -122,19 +98,6 @@ export default function LoginPage() {
           <button type="submit" className="btn-secondary w-full disabled:cursor-not-allowed disabled:opacity-60" disabled={loading}>
             {loading ? 'Ingresando...' : 'Ingresar a VitiCampo'}
           </button>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            {validAccounts.map((account) => (
-              <button
-                key={account.email}
-                type="button"
-                onClick={() => fillDemo(account)}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-purple-200 hover:bg-purple-50 hover:text-purple-900"
-              >
-                {account.role === 'admin' ? 'Administrador' : account.role === 'supervisor' ? 'Supervisor' : 'Operario'}
-              </button>
-            ))}
-          </div>
 
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-500">¿Olvidaste tu contraseña?</span>

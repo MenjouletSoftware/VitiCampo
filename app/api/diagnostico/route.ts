@@ -9,11 +9,15 @@ export async function POST(req: Request) {
       variedadUva?: string;
       faseFenologica?: string;
       sintomasDetectados?: string;
+      image?: string;
+      mimeType?: string;
     };
 
     const variedadUva = body?.variedadUva?.trim();
     const faseFenologica = body?.faseFenologica?.trim();
     const sintomasDetectados = body?.sintomasDetectados?.trim();
+    const rawImage = body?.image ?? '';
+    const mimeType = body?.mimeType ?? 'image/jpeg';
 
     if (!variedadUva || !faseFenologica || !sintomasDetectados) {
       return NextResponse.json(
@@ -28,27 +32,37 @@ export async function POST(req: Request) {
     }
 
     const ai = new GoogleGenAI({ apiKey });
+    const imageData = rawImage.includes('base64,') ? rawImage.split('base64,')[1] : '';
 
-    const prompt = `Actúa como ingeniero agrónomo experto en viticultura. Analiza la situación del viñedo y entrega un informe técnico claro, preciso y profesional.
+    const systemInstruction = `Actúa como un motor agronómico especialista en viticultura y fitosanidad. Debes responder SIEMPRE con un JSON válido y sin markdown. Identifica síntomas de estrés hídrico, mildiu, oídio, botritis, deficiencias nutricionales o ataques fitosanitarios. En el campo "diagnostico" devuelve un objeto con: resumen, severidad, causas_probables, accion_principal, pasos_accionables (array de 3 objetos con prioridad, accion, objetivo). En el campo "reporte" incluye una versión legible en español con un formato de 3 pasos accionables.`;
 
-- Variedad de uva: ${variedadUva}
-- Fase fenológica: ${faseFenologica}
-- Síntomas detectados: ${sintomasDetectados}
+    const userPrompt = `Variedad de uva: ${variedadUva}
+Fase fenológica: ${faseFenologica}
+Síntomas detectados: ${sintomasDetectados}
 
-Incluye:
-1. Diagnóstico presuntivo y principales causas posibles.
-2. Nivel de riesgo.
-3. Plan de acción con exactamente 3 pasos concretos y priorizados.
-4. Recomendaciones técnicas en español.
-
-Responde solo con el texto del informe.`;
+Evalúa la situación agronómica y responde en español con un diagnóstico técnico real, orientado a la toma de decisiones en campo.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: userPrompt },
+            ...(imageData
+              ? [{ inlineData: { mimeType, data: imageData } }]
+              : []),
+          ],
+        },
+      ],
+      config: {
+        temperature: 0.2,
+        responseMimeType: 'application/json',
+        systemInstruction,
+      },
     });
 
-    const text =
+    const rawText =
       (response as any)?.text ??
       (response as any)?.candidates
         ?.map((candidate: any) =>
@@ -59,13 +73,38 @@ Responde solo con el texto del informe.`;
         .join('\n') ??
       '';
 
-    const reporte = text.trim();
+    const cleanText = String(rawText).replace(/```json|```/gi, '').trim();
 
-    if (!reporte) {
+    let payload: any = {
+      reporte: cleanText || 'Diagnóstico no disponible.',
+      diagnostico: {
+        resumen: 'Diagnóstico generado por IA en modo agronómico.',
+        severidad: 'moderada',
+        causas_probables: ['No se pudo extraer el diagnóstico estructurado.'],
+        accion_principal: 'Revisar tejido foliar y condiciones ambientales.',
+        pasos_accionables: [
+          { prioridad: 1, accion: 'Inspeccionar síntomas y humedad relativa', objetivo: 'Confirmar diagnóstico' },
+          { prioridad: 2, accion: 'Actuar con tratamiento o riego ajustado', objetivo: 'Reducir daño' },
+          { prioridad: 3, accion: 'Monitorear evolución en 48-72 horas', objetivo: 'Validar respuesta' },
+        ],
+      },
+    };
+
+    if (cleanText) {
+      try {
+        const parsed = JSON.parse(cleanText);
+        payload = { ...payload, ...parsed };
+        payload.reporte = parsed.reporte ?? payload.reporte;
+      } catch {
+        payload.reporte = cleanText;
+      }
+    }
+
+    if (!payload.reporte) {
       return NextResponse.json({ error: 'Respuesta vacía de la IA' }, { status: 500 });
     }
 
-    return NextResponse.json({ reporte });
+    return NextResponse.json(payload);
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || 'Error interno del servidor al generar el diagnóstico.' },

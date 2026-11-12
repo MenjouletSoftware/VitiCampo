@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 type CreateResp = { success: boolean; url?: string; sessionId?: string; error?: string };
 
 // Use direct HTTP calls to Polar API on the server. Dynamic SDK imports caused
@@ -26,11 +28,25 @@ export async function createCheckout(productId: string, orgId: string, opts?: { 
 }
 
 export async function verifyWebhook(rawBody: string, signature?: string) {
-  // For now, parse the JSON payload and return it. If Polar provides a
-  // webhook signature verification method later, we can add it and use the
-  // `POLAR_WEBHOOK_SECRET` to verify payloads.
+  const secret = process.env.POLAR_WEBHOOK_SECRET;
+  if (!secret) {
+    return { verified: false, error: 'POLAR_WEBHOOK_SECRET not configured' };
+  }
+
   try {
     const event = JSON.parse(rawBody);
+    const candidates = [signature, `sha256=${signature}`].filter(Boolean) as string[];
+    const expected = createHmac('sha256', secret).update(rawBody).digest('base64');
+    const expectedHex = createHmac('sha256', secret).update(rawBody).digest('hex');
+    const isValid = candidates.some((value) => {
+      const normalized = value.trim();
+      return normalized === expected || normalized === expectedHex || normalized === `sha256=${expected}` || normalized === `sha256=${expectedHex}`;
+    });
+
+    if (!isValid) {
+      return { verified: false, error: 'invalid polar signature' };
+    }
+
     return { verified: true, event };
   } catch (err) {
     return { verified: false, error: 'invalid json' };
