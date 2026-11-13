@@ -33,6 +33,7 @@ export async function POST(req: Request) {
 
     const ai = new GoogleGenAI({ apiKey });
     const imageData = rawImage.includes('base64,') ? rawImage.split('base64,')[1] : '';
+    const geminiModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
     const systemInstruction = `Actúa como un motor agronómico especialista en viticultura y fitosanidad. Debes responder SIEMPRE con un JSON válido y sin markdown. Identifica síntomas de estrés hídrico, mildiu, oídio, botritis, deficiencias nutricionales o ataques fitosanitarios. En el campo "diagnostico" devuelve un objeto con: resumen, severidad, causas_probables, accion_principal, pasos_accionables (array de 3 objetos con prioridad, accion, objetivo). En el campo "reporte" incluye una versión legible en español con un formato de 3 pasos accionables.`;
 
@@ -43,7 +44,7 @@ Síntomas detectados: ${sintomasDetectados}
 Evalúa la situación agronómica y responde en español con un diagnóstico técnico real, orientado a la toma de decisiones en campo.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: geminiModel,
       contents: [
         {
           role: 'user',
