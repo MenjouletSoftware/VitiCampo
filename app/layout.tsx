@@ -56,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="VitiCampo" />
+        <meta name="google-site-verification" content="DPcc5jLljZVVwPZfHYmKU7UB7LwZVMB_d_LA3LhrfTA" />
       </head>
       <body className="bg-slate-50 text-slate-900 antialiased">
         <PWARegister />
