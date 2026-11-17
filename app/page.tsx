@@ -38,7 +38,11 @@ export default function Page(): JSX.Element {
 
       const data = (await res.json()) as ApiResponse;
       if (!res.ok) {
-        setError(data?.error ?? 'Error en la solicitud');
+        const serverMessage = data?.error ?? 'Error en la solicitud';
+        const isHighDemandMessage = serverMessage.includes('alta demanda') || serverMessage.includes('aguardá unos segundos');
+        setError(isHighDemandMessage
+          ? 'Los servidores de análisis agronómico están con alta demanda en este momento. Por favor, aguardá unos segundos e intentá nuevamente.'
+          : serverMessage);
       } else {
         setReporte(data.reporte ?? '');
       }

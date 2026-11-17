@@ -56,7 +56,11 @@ export default function IAPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error || 'No fue posible analizar la imagen.');
+        const serverMessage = data?.error || 'No fue posible analizar la imagen.';
+        const cleanMessage = serverMessage.includes('alta demanda') || serverMessage.includes('aguardá unos segundos')
+          ? 'Los servidores de análisis agronómico están con alta demanda en este momento. Por favor, aguardá unos segundos e intentá nuevamente.'
+          : serverMessage;
+        throw new Error(cleanMessage);
       }
 
       setResult(JSON.stringify(data, null, 2));

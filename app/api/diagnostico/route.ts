@@ -3,6 +3,34 @@ import { GoogleGenAI } from '@google/genai';
 
 export const dynamic = 'force-dynamic';
 
+const HIGH_DEMAND_MESSAGE = 'Los servidores de análisis agronómico están con alta demanda en este momento. Por favor, aguardá unos segundos e intentá nuevamente.';
+
+async function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function generateGeminiWithRetry(ai: any, payload: any) {
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await ai.models.generateContent(payload);
+    } catch (error: any) {
+      const status = Number(error?.status ?? error?.code ?? error?.statusCode ?? 0);
+      const message = String(error?.message ?? '').toLowerCase();
+      const isHighDemand = status === 429 || status === 503 || message.includes('429') || message.includes('503') || message.includes('resource exhausted') || message.includes('high demand');
+
+      if (!isHighDemand || attempt >= maxAttempts) {
+        throw error;
+      }
+
+      await wait(2000);
+    }
+  }
+
+  throw new Error(HIGH_DEMAND_MESSAGE);
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as {
@@ -43,7 +71,7 @@ Síntomas detectados: ${sintomasDetectados}
 
 Evalúa la situación agronómica y responde en español con un diagnóstico técnico real, orientado a la toma de decisiones en campo.`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateGeminiWithRetry(ai, {
       model: geminiModel,
       contents: [
         {
@@ -107,6 +135,14 @@ Evalúa la situación agronómica y responde en español con un diagnóstico té
 
     return NextResponse.json(payload);
   } catch (error: any) {
+    const status = Number(error?.status ?? error?.code ?? error?.statusCode ?? 0);
+    const message = String(error?.message ?? '').toLowerCase();
+    const isHighDemand = status === 429 || status === 503 || message.includes('429') || message.includes('503') || message.includes('resource exhausted') || message.includes('high demand');
+
+    if (isHighDemand || message.includes('alta demanda')) {
+      return NextResponse.json({ error: HIGH_DEMAND_MESSAGE }, { status: 503 });
+    }
+
     return NextResponse.json(
       { error: error?.message || 'Error interno del servidor al generar el diagnóstico.' },
       { status: 500 }
